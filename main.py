@@ -1,42 +1,42 @@
 from PySide6.QtWidgets import (
     QMainWindow,
-    QTabWidget,
-    QPlainTextEdit,
     QToolBar,
     QApplication,
     QComboBox,
+    QPushButton,
+    QDialog,
 )
-from PySide6.QtCore import (
-    QThreadPool,
-    QRunnable,
-)
-from PySide6.QtGui import (
-    QAction,
-)
+from PySide6.QtCore import Slot
+from PySide6.QtGui import QTextCursor
 
-
+from enum import Enum
+import time
 import pyqtgraph as pg
 
-class MainWindow(QMainWindow):
+from mainwindow_ui import Ui_MainWindow
+from settings_dialog import SettingsDialog
+from serial_thread import SerialThread
+from serial_port import RealSerialPort, FakeSerialPort
+
+
+class LineEnding(Enum):
+    NO_LINE_ENDING = "No Line Ending"
+    NEW_LINE = "New Line"
+    CARRIAGE_RETURN = "Carriage Return"
+    BOTH_NL_AND_CR = "Both NL & CR"
+
+
+class ThreadControlButtonText(Enum):
+    PAUSE_THREAD = "Stop Listening"
+    RESUME_THREAD = "Start Listening"
+
+
+class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
+        self.setupUi(self)
 
-        self.setWindowTitle("Serial Viewer")
-
-        # Actions
-        self.exit_action = QAction("E&xit", self)
-        self.exit_action.setStatusTip("Exit the application.")
-        self.exit_action.triggered.connect(self.close)
-
-        # Menus
-        self.menu = self.menuBar()
-        self.file_menu = self.menu.addMenu("&File")
-        self.file_menu.addAction(self.exit_action)
-
-        # Status bar
-        self.status = self.statusBar()
-
-        # Toolbar
+        # Setup toolbar - qt designer support for toolbar is limited
         self.toolbar = QToolBar("Main toolbar")
         self.toolbar.toggleViewAction().setEnabled(False)
         self.addToolBar(self.toolbar)
@@ -45,26 +45,65 @@ class MainWindow(QMainWindow):
         self.portChoice.setPlaceholderText("Choose serial device")
         self.toolbar.addWidget(self.portChoice)
 
+        self.refreshPortList = QPushButton()
+        self.refreshPortList.setText("Refresh Ports")
+        self.toolbar.addWidget(self.refreshPortList)
 
-        # Tabs
-        self.textDisplay = QPlainTextEdit()
-        self.graphDisplay = pg.PlotWidget()
-        self.graphDisplay.plot(
+        self.threadControlButton = QPushButton()
+        self.threadControlButton.setText(ThreadControlButtonText.PAUSE_THREAD.value)
+        self.toolbar.addWidget(self.threadControlButton)
+        # End setup toolbar
+
+        self.plotDisplay.plot(
             [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             [30, 32, 34, 32, 33, 31, 29, 32, 35, 45]
         )
 
-        self.tabs = QTabWidget()
-        self.tabs.addTab(self.textDisplay, "Text Display")
-        self.tabs.addTab(self.graphDisplay, "Graph Display")
+        # Line ending choice setup
+        self.lineEndChoice.setPlaceholderText("New Line")
+        self.lineEndChoice.addItems([m.value for m in LineEnding])
+        self.lineEndChoice.setCurrentText(LineEnding.NEW_LINE.value)
 
-        # Central widget
-        self.setCentralWidget(self.tabs)
+        # Serial reader thread
+        self.serialThread = SerialThread(FakeSerialPort())
+        self.serialThread.start()
 
-        # Threads
-        self.threadpool = QThreadPool()
-        self.threadpool.setMaxThreadCount(1)
+        # Connecting signals & slots
+        self.actionExit.triggered.connect(self.close)
+        self.actionSettings.triggered.connect(self.handle_settings_action)
+        self.threadControlButton.clicked.connect(self.handle_thread_control_button)
+        self.serialThread.new_data.connect(self.handle_new_data)
+        
+    @Slot()
+    def handle_thread_control_button(self):
+        if self.serialThread.is_paused():
+            self.serialThread.resume()
+            self.threadControlButton.setText(ThreadControlButtonText.PAUSE_THREAD.value)
+        else:
+            self.serialThread.pause()
+            self.threadControlButton.setText(ThreadControlButtonText.RESUME_THREAD.value)
 
+    @Slot(str)
+    def handle_new_data(self, data: str):
+        self.textDisplay.moveCursor(QTextCursor.MoveOperation.End)
+        self.textDisplay.insertPlainText(data)
+        self.textDisplay.moveCursor(QTextCursor.MoveOperation.End)
+
+    @Slot()
+    def handle_settings_action(self):
+        dialog = SettingsDialog(self)
+        result = dialog.exec()
+
+        if result == QDialog.DialogCode.Accepted:
+            print("acc")
+        else:
+            print("rej")
+
+    def closeEvent(self, event):
+        self.serialThread.shutdown()
+        while self.serialThread.isRunning():
+            time.sleep(0.01)
+        super().closeEvent(event)
 
 app = QApplication()
 

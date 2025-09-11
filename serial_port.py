@@ -1,8 +1,9 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from enum import Enum
+from enum import Enum, IntEnum
 from dataclasses import dataclass
 import random
+import time
 
 import serial
 
@@ -12,7 +13,49 @@ class SerialPort(ABC):
     def read_byte(self) -> bytes: ...
 
 
-class DataBits(Enum):
+class StandardBaudRates(IntEnum):
+    """
+    An enumeration of standard serial communication baud rates.
+    
+    The member names follow the clib termios convention (B prefix).
+    The member values are the integer baud rates.
+    """
+    # Well-supported standard values on all platforms
+    B50 = 50
+    B75 = 75
+    B110 = 110
+    B134 = 134
+    B150 = 150
+    B200 = 200
+    B300 = 300
+    B600 = 600
+    B1200 = 1200
+    B1800 = 1800
+    B2400 = 2400
+    B4800 = 4800
+    B9600 = 9600
+    B19200 = 19200
+    B38400 = 38400
+    B57600 = 57600
+    B115200 = 115200
+
+    # Extended values that work on many platforms and devices
+    B230400 = 230400
+    B460800 = 460800
+    B500000 = 500000
+    B576000 = 576000
+    B921600 = 921600
+    B1000000 = 1000000
+    B1152000 = 1152000
+    B1500000 = 1500000
+    B2000000 = 2000000
+    B2500000 = 2500000
+    B3000000 = 3000000
+    B3500000 = 3500000
+    B4000000 = 4000000
+
+
+class DataBits(IntEnum):
     FIVE = serial.FIVEBITS
     SIX = serial.SIXBITS
     SEVEN = serial.SEVENBITS
@@ -38,10 +81,7 @@ class SerialPortSettings:
     """
     Configuration settings for a serial port connection.
 
-    Attributes:
-        port (str | None): 
-            Device name (e.g., 'COM3' on Windows, '/dev/ttyUSB0' on Unix) or None to leave unspecified.
-        
+    Attributes:        
         baudrate (int): 
             The baud rate for the connection. Common values include 9600, 19200, 115200, etc.
         
@@ -84,7 +124,6 @@ class SerialPortSettings:
             Not all platforms support this. Use None to leave at default behavior.
     """
 
-    port: str | None
     baudrate: int
     bytesize: DataBits
     parity: ParityChecking
@@ -98,10 +137,9 @@ class SerialPortSettings:
     exclusive: bool | None
 
     @staticmethod
-    def default(port: str | None) -> SerialPortSettings:
+    def default() -> SerialPortSettings:
         return SerialPortSettings(
-            port=port,
-            baudrate=9600,
+            baudrate=StandardBaudRates.B9600,
             bytesize=DataBits.EIGHT,
             parity=ParityChecking.NONE,
             stopbits=StopBits.ONE,
@@ -115,12 +153,11 @@ class SerialPortSettings:
         )
 
 
-
 class RealSerialPort(SerialPort):
 
-    def __init__(self, settings: SerialPortSettings) -> None:
+    def __init__(self, port: str, settings: SerialPortSettings) -> None:
         self._port = serial.Serial(
-            port=settings.port,
+            port=port,
             baudrate=settings.baudrate,
             bytesize=settings.bytesize.value,
             parity=settings.parity.value,
@@ -144,4 +181,8 @@ class RealSerialPort(SerialPort):
 
 class FakeSerialPort(SerialPort):
     def read_byte(self) -> bytes:
-        return bytes([random.randint(32, 126)])
+        time.sleep(0.01)
+        ascii_chars = list(range(32, 126))
+        return bytes(
+            [random.choice(ascii_chars + [10])]
+        )
