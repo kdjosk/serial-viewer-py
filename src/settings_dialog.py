@@ -9,8 +9,11 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QWidget,
 )
-from PySide6.QtCore import Slot, Qt
-
+from PySide6.QtCore import (
+    Slot,
+    Qt,
+    QSettings,
+)
 from serial_port import (
     SerialPortSettings,
     StandardBaudRates,  
@@ -95,20 +98,24 @@ class TriStateCheckbox(QWidget):
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, current_settings: SerialPortSettings | None = None, parent=None):
         super().__init__(parent)
 
         self.setWindowTitle("Settings")
-        self.settings = SerialPortSettings.default()
-
+        
+        self.settings = SerialPortSettings.default() if current_settings is None else current_settings
+        
         # Dialog buttons
-        self.buttonBox = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.buttonBox = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok 
+            | QDialogButtonBox.StandardButton.Cancel
+            | QDialogButtonBox.StandardButton.RestoreDefaults
+        )
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
 
         # Create widgets
         self.baudrate_choice = QComboBox()
-        self.baudrate_choice.setEditable(True)
         self.baudrate_choice.addItems(
             [str(v) for v in StandardBaudRates]
         )
@@ -129,7 +136,7 @@ class SettingsDialog(QDialog):
             [str(m.name).lower() for m in ParityChecking]
         )
         self.parity_choice.setCurrentText(
-            str(self.settings.parity).lower()
+            str(self.settings.parity.name).lower()
         )
 
         self.stopbits_choice = QComboBox()
@@ -137,7 +144,7 @@ class SettingsDialog(QDialog):
             [str(m.value) for m in StopBits]
         )
         self.stopbits_choice.setCurrentText(
-            str(self.settings.stopbits)
+            str(self.settings.stopbits.value)
         )
 
         self.timeout_choice = OptionalDoubleSpinBox("Enable")
@@ -180,3 +187,73 @@ class SettingsDialog(QDialog):
         main_layout.addWidget(self.buttonBox)
 
         self.setLayout(main_layout)
+
+    def accept(self): 
+        self.settings = SerialPortSettings(
+            baudrate=int(self.baudrate_choice.currentText()),
+            bytesize=DataBits(int(self.bytesize_choice.currentText())),
+            parity=ParityChecking[self.parity_choice.currentText().upper()],
+            stopbits=StopBits(float(self.stopbits_choice.currentText())),
+            timeout=self.timeout_choice.value(),
+            xonxoff=self.xonxoff_choice.isChecked(),
+            rtscts=self.rtscts_choice.isChecked(),
+            write_timeout=self.write_timeout_choice.value(),
+            dsrdtr=self.dsrdtr_choice.isChecked(),
+            inter_byte_timeout=self.inter_byte_timeout_choice.value(),
+            exclusive=self.exclusive_choice.value(),
+        )
+
+        super().accept()
+
+
+def save_serial_settings(settings: QSettings, config: SerialPortSettings):
+    """Saves the SerialSettings dataclass into a settings group."""
+    print("Saving serial settings...")
+    settings.beginGroup("serial_port")
+    
+    settings.setValue("baudrate", config.baudrate)
+    settings.setValue("bytesize", config.bytesize.name)
+    settings.setValue("parity", config.parity.name)
+    settings.setValue("stopbits", config.stopbits.name)
+    settings.setValue("timeout", config.timeout)
+    settings.setValue("xonxoff", config.xonxoff)
+    settings.setValue("rtscts", config.rtscts)
+    settings.setValue("write_timeout", config.write_timeout)
+    settings.setValue("dsrdtr", config.dsrdtr)
+    settings.setValue("inter_byte_timeout", config.inter_byte_timeout)
+    settings.setValue("exclusive", config.exclusive)
+    
+    settings.endGroup()
+    print("Settings saved.")
+
+
+def load_serial_settings(settings: QSettings) -> SerialPortSettings:
+    """Loads and reconstructs the SerialSettings dataclass from a settings group."""
+    print("Loading serial settings...")
+    settings.beginGroup("serial_port")
+    
+    # For nullable types, we get the value and check if it's valid.
+    # QSettings returns None for missing keys or ones saved as None
+
+    default = SerialPortSettings.default()
+    timeout = settings.value("timeout", default.timeout)
+    write_timeout = settings.value("write_timeout", default.write_timeout)
+    inter_byte_timeout = settings.value("inter_byte_timeout", default.inter_byte_timeout)
+    exclusive = settings.value("exclusive", default.exclusive)
+
+    config = SerialPortSettings(
+        baudrate=StandardBaudRates(settings.value("baudrate", default.baudrate, type=int)),
+        bytesize=DataBits[settings.value("bytesize", default.bytesize, type=str)],
+        parity=ParityChecking[settings.value("parity", default.parity, type=str)],
+        stopbits=StopBits[settings.value("stopbits", default.stopbits, type=str)],
+        timeout=float(timeout) if timeout is not None else None,
+        xonxoff=settings.value("xonxoff", default.xonxoff, type=bool),
+        rtscts=settings.value("rtscts", default.rtscts, type=bool),
+        write_timeout=float(write_timeout) if write_timeout is not None else None,
+        dsrdtr=settings.value("dsrdtr", default.dsrdtr, type=bool),
+        inter_byte_timeout=float(inter_byte_timeout) if inter_byte_timeout is not None else None,
+        exclusive=bool(exclusive) if exclusive is not None else None
+    )
+    settings.endGroup()
+    print("Settings loaded.")
+    return config

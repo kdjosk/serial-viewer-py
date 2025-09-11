@@ -95,8 +95,8 @@ class Ui_MainWindow(object):
         self.menubar.addAction(self.menu_File.menuAction())
         self.menubar.addAction(self.menu_Edit.menuAction())
         self.menubar.addAction(self.menu_Help.menuAction())
-        self.menu_File.addAction(self.actionExit)
         self.menu_File.addAction(self.actionSettings)
+        self.menu_File.addAction(self.actionExit)
 
         self.retranslateUi(MainWindow)
 

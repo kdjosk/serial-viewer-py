@@ -75,8 +75,8 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
-    <addaction name="actionExit"/>
     <addaction name="actionSettings"/>
+    <addaction name="actionExit"/>
    </widget>
    <widget class="QMenu" name="menu_Edit">
     <property name="title">

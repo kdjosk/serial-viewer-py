@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QDialog,
 )
-from PySide6.QtCore import Slot
+from PySide6.QtCore import Slot, QSettings
 from PySide6.QtGui import QTextCursor
 
 from enum import Enum
@@ -14,7 +14,7 @@ import time
 import pyqtgraph as pg
 
 from mainwindow_ui import Ui_MainWindow
-from settings_dialog import SettingsDialog
+from settings_dialog import SettingsDialog, save_serial_settings, load_serial_settings
 from serial_thread import SerialThread
 from serial_port import RealSerialPort, FakeSerialPort
 
@@ -35,6 +35,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
+
+        self.saved_settings = QSettings("kjoskowiak", "SerialViewer")
+        self.loaded_settings = load_serial_settings(self.saved_settings)
 
         # Setup toolbar - qt designer support for toolbar is limited
         self.toolbar = QToolBar("Main toolbar")
@@ -91,13 +94,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def handle_settings_action(self):
-        dialog = SettingsDialog(self)
+        dialog = SettingsDialog(self.loaded_settings, self)
         result = dialog.exec()
 
         if result == QDialog.DialogCode.Accepted:
-            print("acc")
-        else:
-            print("rej")
+            save_serial_settings(self.saved_settings, dialog.settings)
+            self.loaded_settings = dialog.settings
 
     def closeEvent(self, event):
         self.serialThread.shutdown()
