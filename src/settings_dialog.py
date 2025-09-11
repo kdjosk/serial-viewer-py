@@ -114,59 +114,47 @@ class SettingsDialog(QDialog):
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
 
+        self.restoreDefualtsButton = self.buttonBox.button(
+            QDialogButtonBox.StandardButton.RestoreDefaults
+        )
+        self.restoreDefualtsButton.pressed.connect(self.handle_restore_defaults)
+
         # Create widgets
         self.baudrate_choice = QComboBox()
         self.baudrate_choice.addItems(
             [str(v) for v in StandardBaudRates]
         )
-        self.baudrate_choice.setCurrentText(
-            str(self.settings.baudrate)
-        )
-        
+
         self.bytesize_choice = QComboBox()
         self.bytesize_choice.addItems(
             [str(v) for v in DataBits]
-        )
-        self.bytesize_choice.setCurrentText(
-            str(self.settings.bytesize)
         )
 
         self.parity_choice = QComboBox()
         self.parity_choice.addItems(
             [str(m.name).lower() for m in ParityChecking]
         )
-        self.parity_choice.setCurrentText(
-            str(self.settings.parity.name).lower()
-        )
 
         self.stopbits_choice = QComboBox()
         self.stopbits_choice.addItems(
             [str(m.value) for m in StopBits]
         )
-        self.stopbits_choice.setCurrentText(
-            str(self.settings.stopbits.value)
-        )
 
         self.timeout_choice = OptionalDoubleSpinBox("Enable")
-        self.timeout_choice.setValue(self.settings.timeout)
 
         self.xonxoff_choice = QCheckBox("Enable")
-        self.xonxoff_choice.setChecked(self.settings.xonxoff)
 
         self.rtscts_choice = QCheckBox("Enable")
-        self.rtscts_choice.setChecked(self.settings.rtscts)
 
         self.dsrdtr_choice = QCheckBox("Enable")
-        self.dsrdtr_choice.setChecked(self.settings.dsrdtr)
 
         self.write_timeout_choice = OptionalDoubleSpinBox("Enable")
-        self.write_timeout_choice.setValue(self.settings.write_timeout)
 
         self.inter_byte_timeout_choice = OptionalDoubleSpinBox("Enable")
-        self.inter_byte_timeout_choice.setValue(self.settings.inter_byte_timeout)
 
         self.exclusive_choice = TriStateCheckbox("Enable")
-        self.exclusive_choice.setValue(self.settings.exclusive)
+
+        self.update_ui_values()
 
         # Set the layout
         form_layout = QFormLayout()
@@ -204,6 +192,32 @@ class SettingsDialog(QDialog):
         )
 
         super().accept()
+
+    @Slot()
+    def handle_restore_defaults(self):
+        self.settings = SerialPortSettings.default()
+        self.update_ui_values()
+
+    def update_ui_values(self):
+        self.baudrate_choice.setCurrentText(
+            str(self.settings.baudrate)
+        )
+        self.bytesize_choice.setCurrentText(
+            str(self.settings.bytesize)
+        )
+        self.parity_choice.setCurrentText(
+            str(self.settings.parity.name).lower()
+        )
+        self.stopbits_choice.setCurrentText(
+            str(self.settings.stopbits.value)
+        )
+        self.timeout_choice.setValue(self.settings.timeout)
+        self.xonxoff_choice.setChecked(self.settings.xonxoff)
+        self.rtscts_choice.setChecked(self.settings.rtscts)
+        self.dsrdtr_choice.setChecked(self.settings.dsrdtr)
+        self.write_timeout_choice.setValue(self.settings.write_timeout)
+        self.inter_byte_timeout_choice.setValue(self.settings.inter_byte_timeout)
+        self.exclusive_choice.setValue(self.settings.exclusive)
 
 
 def save_serial_settings(settings: QSettings, config: SerialPortSettings):
