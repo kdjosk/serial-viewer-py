@@ -10,31 +10,37 @@ class SerialThread(QThread):
     def __init__(self, port: SerialPort):
         super().__init__()
         self._port = port
-        self._shutdown_set = False
+        self._shutdown_rq = False
+        self._pause_rq = False
         self._is_paused = False
 
     def run(self):
-        while not self._shutdown_set:
+        while not self._shutdown_rq:
 
-            while self._is_paused:
-                if self._shutdown_set:
+            while self._pause_rq:
+                self._is_paused = True
+                if self._shutdown_rq:
                     return
                 time.sleep(0.1)
+
+            self._is_paused = False
 
             byte = self._port.read_byte()
             self.new_data.emit(byte.decode())
 
     @Slot()
     def shutdown(self):
-        self._shutdown_set = True
+        self._shutdown_rq = True
 
     @Slot()
     def pause(self):
-        self._is_paused = True
+        self._pause_rq = True
 
     @Slot()
-    def resume(self):
-        self._is_paused = False
+    def resume(self, new_port: SerialPort | None):
+        if new_port is not None:
+            self._port = new_port
+        self._pause_rq = False
 
     def is_paused(self) -> bool:
         return self._is_paused

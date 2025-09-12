@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QPushButton,
     QDialog,
+    QMessageBox,
 )
 from PySide6.QtCore import Slot, QSettings, QStringListModel
 from PySide6.QtGui import QTextCursor
@@ -13,11 +14,12 @@ from enum import Enum
 import time
 import pyqtgraph as pg
 import serial.tools.list_ports
+import serial.serialutil
 
 from mainwindow_ui import Ui_MainWindow
 from settings_dialog import SettingsDialog, save_serial_settings, load_serial_settings
 from serial_thread import SerialThread
-from serial_port import RealSerialPort, FakeSerialPort
+from serial_port import SerialPort, RealSerialPort, FakeSerialPort
 
 
 class LineEnding(Enum):
@@ -30,6 +32,9 @@ class LineEnding(Enum):
 class ThreadControlButtonText(Enum):
     PAUSE_THREAD = "Stop Listening"
     RESUME_THREAD = "Start Listening"
+
+
+FAKE_PORT_NAME = "fakePort"
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -47,8 +52,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.portChoice = QComboBox()
         self.portChoice.setPlaceholderText("Choose serial device")
-        self.portChoiceModel = QStringListModel()
-        self.portChoice.setModel(self.portChoiceModel)
+        self.portChoice.setCurrentText(FAKE_PORT_NAME)
+        self.previousPortChoice = FAKE_PORT_NAME
         self.handle_refresh_port_list()
         self.toolbar.addWidget(self.portChoice)
 
@@ -72,7 +77,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.lineEndChoice.setCurrentText(LineEnding.NEW_LINE.value)
 
         # Serial reader thread
-        self.serialThread = SerialThread(FakeSerialPort())
+        self.serialThread = SerialThread(self.get_serial_port())
         self.serialThread.start()
 
         # Connecting signals & slots
@@ -81,6 +86,30 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.refreshPortList.clicked.connect(self.handle_refresh_port_list)
         self.threadControlButton.clicked.connect(self.handle_thread_control_button)
         self.serialThread.new_data.connect(self.handle_new_data)
+        self.portChoice.currentTextChanged.connect(self.handle_new_port_choice)
+
+    def get_serial_port(self) -> SerialPort:
+        port_id = self.portChoice.currentText()
+        if port_id == FAKE_PORT_NAME:
+            return FakeSerialPort()
+        return RealSerialPort(port_id, self.loaded_settings)
+
+    @Slot(str)
+    def handle_new_port_choice(self, text):
+        self.serialThread.pause()
+        while not self.serialThread.is_paused():
+            time.sleep(0.1)
+        
+        try:
+            new_port = self.get_serial_port()
+        except serial.serialutil.SerialException as e:
+            QMessageBox.critical(self, f"Error while configuring port", str(e))
+            self.portChoice.setCurrentText(self.previousPortChoice)
+            new_port = None
+        else:
+            self.previousPortChoice = text
+
+        self.serialThread.resume(new_port)
         
     @Slot()
     def handle_thread_control_button(self):
@@ -107,12 +136,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.loaded_settings = dialog.settings
 
     @Slot()
-    def handle_refresh_port_list(self):
-        available_ports = serial.tools.list_ports.comports()
-        
-        self.portChoiceModel.setStringList(
-            sorted([port_info[0] for port_info in available_ports])
-        )
+    def handle_refresh_port_list(self):        
+        available_ports = sorted(
+            [port_info[0] for port_info in serial.tools.list_ports.comports()]
+        ) + [FAKE_PORT_NAME, self.previousPortChoice]  # Do not change the current port
+
+        self.portChoice.blockSignals(True)  # Do not trigger a reconnect
+        self.portChoice.clear()
+        self.portChoice.addItems(available_ports)
+        self.portChoice.setCurrentText(self.previousPortChoice)
+        self.portChoice.blockSignals(False)
 
     def closeEvent(self, event):
         self.serialThread.shutdown()
