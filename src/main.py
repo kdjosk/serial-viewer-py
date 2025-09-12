@@ -12,7 +12,6 @@ from PySide6.QtGui import QTextCursor
 
 from enum import Enum
 import time
-import pyqtgraph as pg
 import serial.tools.list_ports
 import serial.serialutil
 
@@ -20,6 +19,10 @@ from mainwindow_ui import Ui_MainWindow
 from settings_dialog import SettingsDialog, save_serial_settings, load_serial_settings
 from serial_thread import SerialThread
 from serial_port import SerialPort, RealSerialPort, FakeSerialPort
+
+import pyqtgraph as pg
+pg.setConfigOption("background", "w")
+pg.setConfigOption("foreground", "k")
 
 
 class LineEnding(Enum):
@@ -35,6 +38,7 @@ class ThreadControlButtonText(Enum):
 
 
 FAKE_PORT_NAME = "fakePort"
+MAX_SAMPLES = 50
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -66,9 +70,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.toolbar.addWidget(self.threadControlButton)
         # End setup toolbar
 
-        self.plotDisplay.plot(
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            [30, 32, 34, 32, 33, 31, 29, 32, 35, 45]
+        # Setup plot display
+        self.xData = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        self.yData = [30, 32, 34, 32, 33, 31, 29, 32, 35, 45]
+
+        pen = pg.mkPen(color=(255, 0, 0), width=3)
+        self.dataLine = self.plotDisplay.plot(
+            self.xData, self.yData, pen=pen,
         )
 
         # Line ending choice setup
@@ -125,6 +133,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.textDisplay.moveCursor(QTextCursor.MoveOperation.End)
         self.textDisplay.insertPlainText(data)
         self.textDisplay.moveCursor(QTextCursor.MoveOperation.End)
+
+        if data.isdigit():
+            self.xData.append(self.xData[-1] + 1)
+            self.yData.append(int(data))
+
+            if len(self.xData) > MAX_SAMPLES:
+                self.xData = self.xData[1:]
+                self.yData = self.yData[1:]
+            self.dataLine.setData(self.xData, self.yData)
 
     @Slot()
     def handle_settings_action(self):
