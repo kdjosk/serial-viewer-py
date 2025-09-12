@@ -95,6 +95,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.threadControlButton.clicked.connect(self.handle_thread_control_button)
         self.serialThread.new_data.connect(self.handle_new_data)
         self.portChoice.currentTextChanged.connect(self.handle_new_port_choice)
+        self.textInput.returnPressed.connect(self.handle_user_input)
 
     def get_serial_port(self) -> SerialPort:
         port_id = self.portChoice.currentText()
@@ -163,6 +164,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.portChoice.addItems(available_ports)
         self.portChoice.setCurrentText(self.previousPortChoice)
         self.portChoice.blockSignals(False)
+
+    @Slot()
+    def handle_user_input(self):
+        line = self.textInput.text().strip()
+        self.textInput.setText("")
+        ending = LineEnding(self.lineEndChoice.currentText())
+        match ending:
+            case LineEnding.NEW_LINE:
+                line += "\n"
+            case LineEnding.CARRIAGE_RETURN:
+                line += "\r"
+            case LineEnding.BOTH_NL_AND_CR:
+                line += "\n\r"
+            
+        self.serialThread.send_line(line)
 
     def closeEvent(self, event):
         self.serialThread.shutdown()

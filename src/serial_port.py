@@ -12,6 +12,9 @@ class SerialPort(ABC):
     @abstractmethod
     def read_byte(self) -> bytes: ...
 
+    @abstractmethod
+    def send_line(self, line: str) -> None: ...
+
 
 class StandardBaudRates(IntEnum):
     """
@@ -178,6 +181,9 @@ class RealSerialPort(SerialPort):
     def read_byte(self) -> bytes:
         return self._port.read(size=1)
     
+    def send_line(self, line: str) -> None:
+        self._port.write(line.encode())
+    
 
 class FakeSerialPort(SerialPort):
     def read_byte(self) -> bytes:
@@ -186,3 +192,6 @@ class FakeSerialPort(SerialPort):
         return bytes(
             [random.choice(ascii_chars + [10])]
         )
+    
+    def send_line(self, line: str) -> None:
+        print(line.encode())
