@@ -6,12 +6,13 @@ from PySide6.QtWidgets import (
     QPushButton,
     QDialog,
 )
-from PySide6.QtCore import Slot, QSettings
+from PySide6.QtCore import Slot, QSettings, QStringListModel
 from PySide6.QtGui import QTextCursor
 
 from enum import Enum
 import time
 import pyqtgraph as pg
+import serial.tools.list_ports
 
 from mainwindow_ui import Ui_MainWindow
 from settings_dialog import SettingsDialog, save_serial_settings, load_serial_settings
@@ -46,6 +47,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.portChoice = QComboBox()
         self.portChoice.setPlaceholderText("Choose serial device")
+        self.portChoiceModel = QStringListModel()
+        self.portChoice.setModel(self.portChoiceModel)
+        self.handle_refresh_port_list()
         self.toolbar.addWidget(self.portChoice)
 
         self.refreshPortList = QPushButton()
@@ -74,6 +78,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Connecting signals & slots
         self.actionExit.triggered.connect(self.close)
         self.actionSettings.triggered.connect(self.handle_settings_action)
+        self.refreshPortList.clicked.connect(self.handle_refresh_port_list)
         self.threadControlButton.clicked.connect(self.handle_thread_control_button)
         self.serialThread.new_data.connect(self.handle_new_data)
         
@@ -100,6 +105,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if result == QDialog.DialogCode.Accepted:
             save_serial_settings(self.saved_settings, dialog.settings)
             self.loaded_settings = dialog.settings
+
+    @Slot()
+    def handle_refresh_port_list(self):
+        available_ports = serial.tools.list_ports.comports()
+        
+        self.portChoiceModel.setStringList(
+            sorted([port_info[0] for port_info in available_ports])
+        )
 
     def closeEvent(self, event):
         self.serialThread.shutdown()
