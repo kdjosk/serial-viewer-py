@@ -1,2 +1,2 @@
 ui:
-	pyside6-uic mainwindow.ui -o mainwindow_ui.py
+	pyside6-uic src/mainwindow.ui -o src/mainwindow_ui.py

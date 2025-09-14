@@ -16,7 +16,8 @@ import serial.tools.list_ports
 import serial.serialutil
 
 from mainwindow_ui import Ui_MainWindow
-from settings_dialog import SettingsDialog, save_serial_settings, load_serial_settings
+from settings_dialog import SettingsDialog
+from port_settings_tab import save_serial_settings, load_serial_settings
 from serial_thread import SerialThread
 from serial_port import SerialPort, RealSerialPort, FakeSerialPort
 
@@ -48,6 +49,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.saved_settings = QSettings("kjoskowiak", "SerialViewer")
         self.loaded_settings = load_serial_settings(self.saved_settings)
+        # Needed in case the settings file has not been created yet
+        save_serial_settings(self.saved_settings, self.loaded_settings)
 
         # Setup toolbar - qt designer support for toolbar is limited
         self.toolbar = QToolBar("Main toolbar")
@@ -100,15 +103,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def get_serial_port(self) -> SerialPort:
         port_id = self.portChoice.currentText()
         if port_id == FAKE_PORT_NAME:
-            return FakeSerialPort()
+            return FakeSerialPort(self.loaded_settings)
         return RealSerialPort(port_id, self.loaded_settings)
 
-    @Slot(str)
-    def handle_new_port_choice(self, text):
+    def stop_serial_port(self) -> None:
         self.serialThread.pause()
         while not self.serialThread.is_paused():
             time.sleep(0.1)
         
+    @Slot(str)
+    def handle_new_port_choice(self, text):
+        self.stop_serial_port()
+
         try:
             new_port = self.get_serial_port()
         except serial.serialutil.SerialException as e:
@@ -152,6 +158,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if result == QDialog.DialogCode.Accepted:
             save_serial_settings(self.saved_settings, dialog.settings)
             self.loaded_settings = dialog.settings
+            self.stop_serial_port()
+            self.serialThread.resume(
+                self.get_serial_port()
+            )
+
 
     @Slot()
     def handle_refresh_port_list(self):        
@@ -176,7 +187,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             case LineEnding.CARRIAGE_RETURN:
                 line += "\r"
             case LineEnding.BOTH_NL_AND_CR:
-                line += "\n\r"
+                line += "\r\n"
             
         self.serialThread.send_line(line)
 

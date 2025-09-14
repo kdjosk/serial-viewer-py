@@ -10,10 +10,10 @@ import serial
 class SerialPort(ABC):
 
     @abstractmethod
-    def read_byte(self) -> bytes: ...
+    def read(self) -> bytes: ...
 
     @abstractmethod
-    def send_line(self, line: str) -> None: ...
+    def send(self, line: str) -> None: ...
 
 
 class StandardBaudRates(IntEnum):
@@ -79,12 +79,20 @@ class StopBits(Enum):
     TWO = serial.STOPBITS_TWO
 
 
+class ReadingMode(Enum):
+    READ_LINE = "Read line"
+    READ_BYTE = "Read byte"
+
+
 @dataclass
 class SerialPortSettings:
     """
     Configuration settings for a serial port connection.
 
-    Attributes:        
+    Attributes:
+        reading_mode (str)
+            Describes whether the port will return data after a newline or after every byte
+         
         baudrate (int): 
             The baud rate for the connection. Common values include 9600, 19200, 115200, etc.
         
@@ -127,7 +135,8 @@ class SerialPortSettings:
             Not all platforms support this. Use None to leave at default behavior.
     """
 
-    baudrate: int
+    reading_mode: ReadingMode
+    baudrate: StandardBaudRates
     bytesize: DataBits
     parity: ParityChecking
     stopbits: StopBits
@@ -142,6 +151,7 @@ class SerialPortSettings:
     @staticmethod
     def default() -> SerialPortSettings:
         return SerialPortSettings(
+            reading_mode=ReadingMode.READ_LINE,
             baudrate=StandardBaudRates.B9600,
             bytesize=DataBits.EIGHT,
             parity=ParityChecking.NONE,
@@ -159,6 +169,7 @@ class SerialPortSettings:
 class RealSerialPort(SerialPort):
 
     def __init__(self, port: str, settings: SerialPortSettings) -> None:
+        self._reading_mode = settings.reading_mode
         self._port = serial.Serial(
             port=port,
             baudrate=settings.baudrate,
@@ -178,20 +189,36 @@ class RealSerialPort(SerialPort):
         """ Will open the port with the new setting """
         self._port.port = port
 
-    def read_byte(self) -> bytes:
-        return self._port.read(size=1)
+    def read(self) -> bytes:
+        match self._reading_mode:
+            case ReadingMode.READ_BYTE:
+                return self._port.read(size=1)
+            case ReadingMode.READ_LINE:
+                return self._port.readline()
     
-    def send_line(self, line: str) -> None:
+    def send(self, line: str) -> None:
         self._port.write(line.encode())
     
 
 class FakeSerialPort(SerialPort):
-    def read_byte(self) -> bytes:
-        time.sleep(0.01)
-        ascii_chars = list(range(32, 126))
-        return bytes(
-            [random.choice(ascii_chars + [10])]
-        )
+    def __init__(self, settings: SerialPortSettings) -> None:
+        self._settings = settings
     
-    def send_line(self, line: str) -> None:
+    def read(self) -> bytes:
+        match self._settings.reading_mode:
+            case ReadingMode.READ_BYTE:
+                time.sleep(0.01)
+                ascii_chars = list(range(32, 126))
+                return bytes(
+                    [random.choice(ascii_chars + [10])]
+                )
+            case ReadingMode.READ_LINE:
+                time.sleep(0.1)
+                ascii_chars = list(range(32, 126))
+                length = random.randint(10, 40)
+                return bytes(
+                    [random.choice(ascii_chars) for _ in range(length)] + [10]
+                )
+    
+    def send(self, line: str) -> None:
         print(line.encode())

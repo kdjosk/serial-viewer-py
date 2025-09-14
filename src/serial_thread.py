@@ -28,10 +28,10 @@ class SerialThread(QThread):
             self._is_paused = False
 
             while not self._lines_to_send.empty():
-                self._port.send_line(self._lines_to_send.get())
+                self._port.send(self._lines_to_send.get())
 
-            byte = self._port.read_byte()
-            self.new_data.emit(byte.decode())
+            byte = self._port.read()
+            self.new_data.emit(byte.decode(errors="replace"))
 
     @Slot()
     def shutdown(self):
