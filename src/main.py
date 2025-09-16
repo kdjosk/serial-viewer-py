@@ -1,3 +1,4 @@
+import json
 from PySide6.QtWidgets import (
     QMainWindow,
     QToolBar,
@@ -19,7 +20,7 @@ from mainwindow_ui import Ui_MainWindow
 from settings_dialog import SettingsDialog
 from port_settings_tab import save_serial_settings, load_serial_settings
 from serial_thread import SerialThread
-from serial_port import SerialPort, RealSerialPort, FakeSerialPort
+from serial_port import ReadingMode, SerialPort, RealSerialPort, FakeSerialPort
 
 import pyqtgraph as pg
 pg.setConfigOption("background", "w")
@@ -74,13 +75,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # End setup toolbar
 
         # Setup plot display
-        self.xData = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        self.yData = [30, 32, 34, 32, 33, 31, 29, 32, 35, 45]
+        self.plotData = {"default": [], "t": []}
+        self.timeStart = time.monotonic()
 
-        pen = pg.mkPen(color=(255, 0, 0), width=3)
-        self.dataLine = self.plotDisplay.plot(
-            self.xData, self.yData, pen=pen,
-        )
+        self.curves = {"default": self.plotDisplay.plot()}
+        self.curves["default"].setPen((200,200,100))
+
 
         # Line ending choice setup
         self.lineEndChoice.setPlaceholderText("New Line")
@@ -141,14 +141,31 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.textDisplay.insertPlainText(data)
         self.textDisplay.moveCursor(QTextCursor.MoveOperation.End)
 
-        if data.isdigit():
-            self.xData.append(self.xData[-1] + 1)
-            self.yData.append(int(data))
+        if self.loaded_settings.reading_mode is ReadingMode.READ_LINE:
+            parsed_data = json.loads(data)
 
-            if len(self.xData) > MAX_SAMPLES:
-                self.xData = self.xData[1:]
-                self.yData = self.yData[1:]
-            self.dataLine.setData(self.xData, self.yData)
+            new_data_added = False
+
+            if isinstance(parsed_data, (int, float)):
+                new_data_added = True
+                self.plotData["default"].append(parsed_data)
+
+            elif isinstance(parsed_data, dict):
+                for label, data_point in parsed_data.items():
+                    # TODO: flatten the dict
+                    assert isinstance(data_point, (int, float))
+                    new_data_added = True
+                    if label not in self.plotData:
+                        self.plotData[label] = [data_point]
+                        self.curves[label] = self.plotDisplay.plot()
+                        self.curves[label].setPen((200,0,0), width=3)
+                    else:
+                        self.plotData[label].append(data_point)
+                    
+            if new_data_added:
+                self.plotData["t"].append(time.monotonic() - self.timeStart)
+                for label, curve in self.curves.items():
+                    curve.setData(x=self.plotData["t"], y=self.plotData[label])
 
     @Slot()
     def handle_settings_action(self):

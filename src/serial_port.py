@@ -216,9 +216,8 @@ class FakeSerialPort(SerialPort):
                 time.sleep(0.1)
                 ascii_chars = list(range(32, 126))
                 length = random.randint(10, 40)
-                return bytes(
-                    [random.choice(ascii_chars) for _ in range(length)] + [10]
-                )
+                # return f"{random.randint(10, 40)}\n".encode()
+                return f'{{"x": {random.randint(20, 50)}, "y": {random.randint(0, 20)}}}\n'.encode()
     
     def send(self, line: str) -> None:
         print(line.encode())
